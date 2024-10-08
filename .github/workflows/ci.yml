@@ -89,3 +89,116 @@ jobs:
         pip install pip -U
         ls
         pip install mercurial-*.tar.gz -v --no-deps
+
+  wheels:
+    needs: prepare-sources
+    runs-on: ${{ matrix.os }}-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu
+            architecture: x86_64
+          # too long, see job wheel-ubuntu-aarch64
+          # - os: ubuntu
+          #   architecture: aarch64
+          - os: macos
+            architecture: x86_64
+          - os: macos
+            architecture: arm64
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: sources
+      - uses: actions/setup-python@v5
+        with:
+          python-version: 3.x
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v2.19.2
+        env:
+          CIBW_SKIP: cp36-* cp37-* cp38-* *-musllinux*
+          CIBW_ARCHS: ${{ matrix.architecture }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-${{ matrix.os }}-${{ matrix.architecture }}
+          path: wheelhouse/*.whl
+
+  wheels-windows:
+    needs: prepare-sources
+    runs-on: ${{ matrix.os }}-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows
+            architecture: AMD64
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: sources
+      - uses: actions/setup-python@v5
+        with:
+          python-version: 3.x
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v2.19.2
+        env:
+          CIBW_SKIP: pp* cp36-* cp37-* cp38-* *-musllinux*
+          CIBW_ARCHS: ${{ matrix.architecture }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-${{ matrix.os }}-${{ matrix.architecture }}
+          path: wheelhouse/*.whl
+
+  wheel-ubuntu-aarch64:
+    needs: prepare-sources
+    if: |
+      github.event_name == 'push' &&
+      startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: sources
+      - uses: docker/setup-qemu-action@v2
+        with:
+          platforms: arm64
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: 3.x
+
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v2.19.2
+        env:
+          CIBW_SKIP: pp* cp36-* cp37-* cp38-* *-musllinux*
+          CIBW_ARCHS: aarch64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-ubuntu-aarch64
+          path: wheelhouse/*.whl
+
+  # pypi-publish:
+  #   name: Upload release to PyPI
+  #   if: |
+  #     github.event_name == 'push' &&
+  #     startsWith(github.ref, 'refs/tags/')
+  #   needs:
+  #     - wheels
+  #     - wheels-windows
+  #     - wheel-ubuntu-aarch64
+  #     - sdist
+  #     - check-sdist
+  #   runs-on: ubuntu-latest
+  #   environment:
+  #     name: publish
+  #     url: https://pypi.org/p/mercurial
+  #   permissions:
+  #     id-token: write  # IMPORTANT: this permission is mandatory for trusted publishing
+  #   steps:
+  #   - uses: actions/download-artifact@v4
+  #     with:
+  #       path: dist
+  #       merge-multiple: true
+  #   - run: ls dist
+  #   - name: Publish package distributions to PyPI
+  #     uses: pypa/gh-action-pypi-publish@release/v1
