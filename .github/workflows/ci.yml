@@ -1,15 +1,15 @@
 
-name: Caching Mercurial repo
+name: Mercurial CI with repo caching
 
 on: push
 
 jobs:
-  prepare-sources:
+  update-repo:
     runs-on: ubuntu-latest
 
     steps:
 
-    - name: Setup Mercurial
+    - name: Setup Mercurial app
       run: |
         python3 -m pip install hg-evolve --user
         echo "[extensions]" >> ~/.hgrc
@@ -35,28 +35,22 @@ jobs:
         fi
         hg up default --cwd ~/mercurial-devel
 
-    - name: Use Mercurial repo
+    - name: Check Mercurial repo
       run: |
         hg log -r "-12:" --cwd ~/mercurial-devel
-        hg archive ${{ github.workspace }}/sources --cwd ~/mercurial-devel
-
-    - uses: actions/upload-artifact@v4
-      with:
-        name: sources
-        path: sources
-        include-hidden-files: true
 
   sdist:
-    needs: prepare-sources
+    needs: update-repo
     runs-on: ubuntu-latest
     steps:
-      - name: Setup cached Mercurial repo
+      - name: Setup cached Mercurial repo (read only)
         uses: actions/cache@v4
         with:
           path: ~/mercurial-devel
           key: cached-repo
 
-      - run: |
+      - name: Make doc and MANIFEST.in
+        run: |
           python -m pip install docutils
           cd ~/mercurial-devel
           make doc
@@ -74,24 +68,38 @@ jobs:
           name: sdist
           path: ~/mercurial-devel/dist/*.tar.gz
 
+      - name: Untar sdist to prepare the sources for wheels
+        run: |
+          cd ~/mercurial-devel/dist/
+          tar -xf *.tar.gz
+          rm -f *.tar.gz
+          mv mercurial* sources
+
+      - name: Save the source directory as an artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sources
+          path: ~/mercurial-devel/dist/sources
+          include-hidden-files: true
+
   check-sdist:
     runs-on: ubuntu-latest
     needs:
       - sdist
     steps:
-    - uses: actions/download-artifact@v4
-      with:
-        name: sdist
-    - uses: actions/setup-python@v5
-      with:
-        python-version: 3.12
-    - run: |
-        pip install pip -U
-        ls
-        pip install mercurial-*.tar.gz -v --no-deps
+      - uses: actions/download-artifact@v4
+        with:
+          name: sdist
+      - uses: actions/setup-python@v5
+        with:
+          python-version: 3.12
+      - run: |
+          pip install pip -U
+          ls
+          pip install mercurial-*.tar.gz -v --no-deps
 
   wheels:
-    needs: prepare-sources
+    needs: sdist
     runs-on: ${{ matrix.os }}-latest
     strategy:
       fail-fast: false
@@ -124,7 +132,7 @@ jobs:
           path: wheelhouse/*.whl
 
   wheels-windows:
-    needs: prepare-sources
+    needs: sdist
     runs-on: ${{ matrix.os }}-latest
     strategy:
       fail-fast: false
@@ -150,7 +158,7 @@ jobs:
           path: wheelhouse/*.whl
 
   wheel-ubuntu-aarch64:
-    needs: prepare-sources
+    needs: sdist
     if: |
       github.event_name == 'push' &&
       startsWith(github.ref, 'refs/tags/')
