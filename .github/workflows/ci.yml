@@ -37,17 +37,26 @@ jobs:
 
     - name: Check Mercurial repo
       run: |
-        hg log -r "-12:" --cwd ~/mercurial-devel
+        cd ~/mercurial-devel
+        hg log -r "-4:"
+        hg sum
 
   sdist:
     needs: update-repo
     runs-on: ubuntu-latest
     steps:
-      - name: Setup cached Mercurial repo (read only)
+      - name: Setup cached Mercurial repo
         uses: actions/cache@v4
         with:
           path: ~/mercurial-devel
-          key: cached-repo
+          key: cached-repo-${{ github.run_id }}
+          restore-keys: |
+            cached-repo
+
+      - name: Check Mercurial repo
+        run: |
+          hg log -r "-4:" --cwd ~/mercurial-devel
+          hg sum --cwd ~/mercurial-devel
 
       - name: Make doc and MANIFEST.in
         run: |
@@ -58,11 +67,10 @@ jobs:
           cd -
 
       - run: python -m pip install build twine
+      - run: rm -rf ~/mercurial-devel/dist
       - run: python -m build --sdist ~/mercurial-devel
-      # Cannot check because:
-      # Checking dist/mercurial-6.8.1+hg294.d7f17819ae9e.tar.gz: FAILED due to warnings
-      # WARNING  `long_description_content_type` missing. defaulting to `text/x-rst`.
-      # - run: twine check --strict dist/*
+      - run: ls -l ~/mercurial-devel/dist
+      - run: twine check --strict ~/mercurial-devel/dist/*
       - uses: actions/upload-artifact@v4
         with:
           name: sdist
