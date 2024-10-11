@@ -1,5 +1,5 @@
 
-name: Mercurial CI with repo caching
+name: Build and publish on PyPI
 
 on: push
 
@@ -9,37 +9,38 @@ jobs:
 
     steps:
 
-    - name: Setup Mercurial app
-      run: |
-        python3 -m pip install hg-evolve --user
-        echo "[extensions]" >> ~/.hgrc
-        echo "topic =" >> ~/.hgrc
-        hg version -v
+      - name: Setup Mercurial app
+        run: |
+          python3 -m pip install hg-evolve --user
+          echo "[extensions]" >> ~/.hgrc
+          echo "topic =" >> ~/.hgrc
+          hg version -v
+          hg debuginstall
 
-    - name: Setup cached Mercurial repo
-      uses: actions/cache@v4
-      with:
-        path: ~/mercurial-devel
-        key: cached-repo-${{ github.run_id }}
-        restore-keys: |
-          cached-repo
+      - name: Setup cached Mercurial repo
+        uses: actions/cache@v4
+        with:
+          path: ~/mercurial-devel
+          key: cached-repo-${{ github.run_id }}
+          restore-keys: |
+            cached-repo
 
-    - name: Clone or update Mercurial repo
-      run: |
-        if [ -d ~/mercurial-devel ]; then
-            echo "Directory exists. Pull."
-            hg pull --cwd ~/mercurial-devel
-        else
-            echo "Directory does not exist. Clone."
-            hg clone https://foss.heptapod.net/mercurial/mercurial-devel ~/mercurial-devel
-        fi
-        hg up default --cwd ~/mercurial-devel
+      - name: Clone or update Mercurial repo
+        run: |
+          if [ -d ~/mercurial-devel ]; then
+              echo "Directory exists. Pull."
+              hg pull --cwd ~/mercurial-devel
+          else
+              echo "Directory does not exist. Clone."
+              hg clone https://foss.heptapod.net/mercurial/mercurial-devel ~/mercurial-devel
+          fi
+          hg up default --cwd ~/mercurial-devel
 
-    - name: Check Mercurial repo
-      run: |
-        cd ~/mercurial-devel
-        hg log -r "-4:"
-        hg sum
+      - name: Check Mercurial repo
+        run: |
+          cd ~/mercurial-devel
+          hg log -r "-4:"
+          hg sum
 
   sdist:
     needs: update-repo
@@ -132,11 +133,12 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.19.2
         env:
-          CIBW_SKIP: cp36-* cp37-* cp38-* *-musllinux*
+          CIBW_SKIP: pp* cp36-* cp37-* cp38-* *-musllinux*
           CIBW_ARCHS: ${{ matrix.architecture }}
           CIBW_TEST_COMMAND: >
             which hg &&
-            hg version -v
+            hg version -v &&
+            hg debuginstall
 
       - uses: actions/upload-artifact@v4
         with:
@@ -166,7 +168,9 @@ jobs:
           CIBW_ARCHS: ${{ matrix.architecture }}
           CIBW_TEST_COMMAND: >
             which hg &&
-            hg version -v
+            hg version -v &&
+            hg debuginstall
+
       - uses: actions/upload-artifact@v4
         with:
           name: wheel-${{ matrix.os }}-${{ matrix.architecture }}
@@ -197,7 +201,8 @@ jobs:
           CIBW_ARCHS: aarch64
           CIBW_TEST_COMMAND: >
             which hg &&
-            hg version -v
+            hg version -v &&
+            hg debuginstall
       - uses: actions/upload-artifact@v4
         with:
           name: wheel-ubuntu-aarch64
