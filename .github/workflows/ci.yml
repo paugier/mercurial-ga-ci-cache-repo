@@ -134,6 +134,10 @@ jobs:
         env:
           CIBW_SKIP: cp36-* cp37-* cp38-* *-musllinux*
           CIBW_ARCHS: ${{ matrix.architecture }}
+          CIBW_TEST_COMMAND: >
+            which hg &&
+            hg version -v
+
       - uses: actions/upload-artifact@v4
         with:
           name: wheel-${{ matrix.os }}-${{ matrix.architecture }}
@@ -160,6 +164,9 @@ jobs:
         env:
           CIBW_SKIP: pp* cp36-* cp37-* cp38-* *-musllinux*
           CIBW_ARCHS: ${{ matrix.architecture }}
+          CIBW_TEST_COMMAND: >
+            which hg &&
+            hg version -v
       - uses: actions/upload-artifact@v4
         with:
           name: wheel-${{ matrix.os }}-${{ matrix.architecture }}
@@ -188,6 +195,9 @@ jobs:
         env:
           CIBW_SKIP: pp* cp36-* cp37-* cp38-* *-musllinux*
           CIBW_ARCHS: aarch64
+          CIBW_TEST_COMMAND: >
+            which hg &&
+            hg version -v
       - uses: actions/upload-artifact@v4
         with:
           name: wheel-ubuntu-aarch64
